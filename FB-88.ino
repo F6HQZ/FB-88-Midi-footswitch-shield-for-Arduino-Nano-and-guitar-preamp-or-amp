@@ -3,6 +3,8 @@
 * Arduino nano project.
 * This is to propose a pedalboard able to replace the Carvin FS-77, but it's ok for other brands or to add Midi control to amps which have not.
 * Need an hardware interface to correctly electricaly isolate and protect the Arduino Nano from the external Carvin Quad-X preamp footswitch connector negative voltage to avoid to destroy the Nano GPIOs.
+* You will find my FB-88 Arduino/Nano "shield" (complete board, CMS components installed, soldered, card full tested by mysel) there :
+* https://www.quintium.fr/19-musiciens
 *
 * V.1.0.1 28-11-2018
 *
