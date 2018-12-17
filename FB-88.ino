@@ -3,10 +3,10 @@
 * Arduino nano project.
 * This is to propose a pedalboard able to replace the Carvin FS-77, but it's ok for other brands or to add Midi control to amps which have not.
 * Need an hardware interface to correctly electricaly isolate and protect the Arduino Nano from the external Carvin Quad-X preamp footswitch connector negative voltage to avoid to destroy the Nano GPIOs.
-* You will find my FB-88 Arduino/Nano "shield" (complete board, CMS components installed, soldered, card full tested by mysel) there :
+* You will find my FB-88 Arduino/Nano "shield" (complete board, CMS components installed, soldered, card  :
 * https://www.quintium.fr/19-musiciens
 *
-* V.1.0.1 28-11-2018
+* V.1.0.3 2018-12-17
 *
 * created 15/09/2018
 * by F6HQZ Francois BERGERET
@@ -102,7 +102,7 @@ int button6State = HIGH;
 int button7State = HIGH;
 int button8State = HIGH;
 // debouncing section :
-unsigned long debounceDelay = 20; // debounce time; increase if some issues with switch debounces and output flickers
+unsigned long debounceDelay = 10; // debounce time; increase if some issues with switch debounces and output flickers
 int lastButton1State = HIGH; // previous state for debouncing
 int lastButton2State = HIGH;
 int lastButton3State = HIGH;
@@ -380,93 +380,84 @@ void loop() {
   }
   if (reading1 != lastButton1State) {  // Button state change 
     if (lastButton1State == HIGH) {    // Button is OFF
-      lastDebounceButton1 = millis();
-      delay(debounceDelay);
+      // lastDebounceButton1 = millis();
       if ((reading1 == LOW) && (lastButton1State == HIGH)) {    // Button pushed AND was not before then toggle output status
         digitalWrite(output1, !(output1State));
         output1State = !(output1State);
         lastButton1State = LOW;        // button pushed ON     
         switchChan1();     
-      } 
-    }      
+        // delay(debounceDelay); // used for OFF to ON transition only; normaly not needed for a radio group buttons
+      } else {
+        // delay(debounceDelay); // used for ON to OFF transition only; normaly not needed for a radio group buttons
+      }   
+    }
+    delay(debounceDelay); // for each button status change   
+    lastButton1State = reading1;         // synchronize with the switch status now
   } else {                             // Button state no change
-    lastDebounceButton1 = millis();
-    delay(debounceDelay);
+    // lastDebounceButton1 = millis();
   }
-  lastButton1State = reading1;         // synchronize with the switch status now
+  // lastButton1State = reading1;         // synchronize with the switch status now
 
 // chan #2  
-  int reading2 = analogRead(button2); // read the buttons state
+  int reading2 = analogRead(button2);
   if (reading2 < 512) {
     reading2 = LOW;
   } else {
     reading2 = HIGH;
   }
-  if (reading2 != lastButton2State) {  // Button state change 
-    if (lastButton2State == HIGH) {    // Button is OFF
-      lastDebounceButton2 = millis();
-      delay(debounceDelay);
-      if ((reading2 == LOW) && (lastButton2State == HIGH)) {    // Button pushed AND was not before then toggle output status
+  if (reading2 != lastButton2State) { 
+    if (lastButton2State == HIGH) {
+      if ((reading2 == LOW) && (lastButton2State == HIGH)) {
         digitalWrite(output2, !(output2State));
         output2State = !(output2State);
-        lastButton2State = LOW;        // button pushed ON     
+        lastButton2State = LOW;     
         switchChan2();     
       } 
     }      
-  } else {                             // Button state no change
-    lastDebounceButton2 = millis();
     delay(debounceDelay);
+    lastButton2State = reading2; 
   }
-  lastButton2State = reading2;         // synchronize with the switch status now
   
 // chan #3  
-  int reading3 = analogRead(button3); // read the buttons state
+  int reading3 = analogRead(button3);
   if (reading3 < 512) {
     reading3 = LOW;
   } else {
     reading3 = HIGH;
   }
-  if (reading3 != lastButton3State) {  // Button state change 
-    if (lastButton3State == HIGH) {    // Button is OFF
-      lastDebounceButton3 = millis();
-      delay(debounceDelay);
-      if ((reading3 == LOW) && (lastButton3State == HIGH)) {    // Button pushed AND was not before then toggle output status
+  if (reading3 != lastButton3State) {  
+    if (lastButton3State == HIGH) { 
+      if ((reading3 == LOW) && (lastButton3State == HIGH)) { 
         digitalWrite(output3, !(output3State));
         output3State = !(output3State);
-        lastButton3State = LOW;        // button pushed ON     
-        switchChan3();     
+        lastButton3State = LOW; 
+        switchChan3();   
       } 
     }      
-  } else {                             // Button state no change
-    lastDebounceButton3 = millis();
     delay(debounceDelay);
+    lastButton3State = reading3; 
   }
-  lastButton3State = reading3;         // synchronize with the switch status now
 
 // chan #4  
-  int reading4 = analogRead(button4); // read the buttons state
+  int reading4 = analogRead(button4);
   if (reading4 < 512) {
     reading4 = LOW;
   } else {
     reading4 = HIGH;
   }
-  if (reading4 != lastButton4State) {  // Button state change 
-    if (lastButton4State == HIGH) {    // Button is OFF
-      lastDebounceButton4 = millis();
-      delay(debounceDelay);
-      if ((reading4 == LOW) && (lastButton4State == HIGH)) {    // Button pushed AND was not before then toggle output status
+  if (reading4 != lastButton4State) { 
+    if (lastButton4State == HIGH) {
+      if ((reading4 == LOW) && (lastButton4State == HIGH)) {
         digitalWrite(output4, !(output4State));
         output4State = !(output4State);
-        lastButton4State = LOW;        // button pushed ON     
-        switchChan4();     
+        lastButton4State = LOW;     
+        switchChan4();   
       } 
     }      
-  } else {                             // Button state no change
-    lastDebounceButton4 = millis();
     delay(debounceDelay);
+    lastButton4State = reading4; 
   }
-  lastButton4State = reading4;         // synchronize with the switch status now
-
+  
 // These 4 following independant buttons are to select FX, REV, EQU for a Carvin Quad-X, and an OPT for other amp/preamp :
 
   // button #5 :
@@ -478,7 +469,7 @@ void loop() {
    }
   if (reading5 != lastButton5State) {  // Button state change
     if (lastButton5State == HIGH) {    // Button is OFF
-      lastDebounceButton5 = millis();
+      // lastDebounceButton5 = millis();
       delay(debounceDelay);
       if ((reading5 == LOW) && (lastButton5State == HIGH)) {    // Button pushed AND was not before then toggle output status
         digitalWrite(output5, !(output5State));
@@ -490,7 +481,7 @@ void loop() {
       }
     }
   } else {                             // Button state no change
-    lastDebounceButton5 = millis();
+    // lastDebounceButton5 = millis();
     delay(debounceDelay);
   }
   lastButton5State = reading5;         // synchronize with the switch status now
