@@ -391,8 +391,8 @@ void loop() {
         // delay(debounceDelay); // used for ON to OFF transition only; normaly not needed for a radio group buttons
       }   
     }
-    delay(debounceDelay); // for each button status change   
     lastButton1State = reading1;         // synchronize with the switch status now
+    delay(debounceDelay); // for each button status change   
   } else {                             // Button state no change
     // lastDebounceButton1 = millis();
   }
@@ -414,8 +414,8 @@ void loop() {
         switchChan2();     
       } 
     }      
-    delay(debounceDelay);
     lastButton2State = reading2; 
+    delay(debounceDelay);
   }
   
 // chan #3  
@@ -434,8 +434,8 @@ void loop() {
         switchChan3();   
       } 
     }      
-    delay(debounceDelay);
-    lastButton3State = reading3; 
+    lastButton3State = reading3;
+    delay(debounceDelay); 
   }
 
 // chan #4  
@@ -454,8 +454,8 @@ void loop() {
         switchChan4();   
       } 
     }      
-    delay(debounceDelay);
     lastButton4State = reading4; 
+    delay(debounceDelay);
   }
   
 // These 4 following independant buttons are to select FX, REV, EQU for a Carvin Quad-X, and an OPT for other amp/preamp :
@@ -469,8 +469,6 @@ void loop() {
    }
   if (reading5 != lastButton5State) {  // Button state change
     if (lastButton5State == HIGH) {    // Button is OFF
-      // lastDebounceButton5 = millis();
-      delay(debounceDelay);
       if ((reading5 == LOW) && (lastButton5State == HIGH)) {    // Button pushed AND was not before then toggle output status
         digitalWrite(output5, !(output5State));
         output5State = !(output5State);
@@ -480,11 +478,9 @@ void loop() {
         memorisation();  
       }
     }
-  } else {                             // Button state no change
-    // lastDebounceButton5 = millis();
+    lastButton5State = reading5;         // synchronize with the switch status now
     delay(debounceDelay);
   }
-  lastButton5State = reading5;         // synchronize with the switch status now
 
   // button #6 :
   int reading6 = analogRead(button6); // read the buttons state
@@ -495,8 +491,6 @@ void loop() {
    }
   if (reading6 != lastButton6State) {  // Button state change
     if (lastButton6State == HIGH) {    // Button is OFF
-      lastDebounceButton6 = millis();
-      delay(debounceDelay);
       if ((reading6 == LOW) && (lastButton6State == HIGH)) {    // Button pushed AND was not before then toggle output status
         digitalWrite(output6, !(output6State));
         output6State = !(output6State);
@@ -506,11 +500,9 @@ void loop() {
         memorisation();     
       }
     }
-  } else {                             // Button state no change
-    lastDebounceButton6 = millis();
+    lastButton6State = reading6;         // synchronize with the switch status now
     delay(debounceDelay);
   }
-  lastButton6State = reading6;         // synchronize with the switch status now
     
   // button #7 :
   int reading7 = analogRead(button7); // read the buttons state
@@ -521,8 +513,6 @@ void loop() {
    }
   if (reading7 != lastButton7State) {  // Button state change
     if (lastButton7State == HIGH) {    // Button is OFF
-      lastDebounceButton7 = millis();
-      delay(debounceDelay);
       if ((reading7 == LOW) && (lastButton7State == HIGH)) {    // Button pushed AND was not before then toggle output status
         digitalWrite(output7, !(output7State));
         output7State = !(output7State);
@@ -532,12 +522,10 @@ void loop() {
         memorisation();            
       }
     }
-  } else {                             // Button state no change
-    lastDebounceButton7 = millis();
+    lastButton7State = reading7;         // synchronize with the switch status now
     delay(debounceDelay);
   }
-  lastButton7State = reading7;         // synchronize with the switch status now
-
+  
   // button #8 :
   int reading8 = analogRead(button8); // read the buttons state
    if (reading8 < 512) {
@@ -547,8 +535,6 @@ void loop() {
    }
   if (reading8 != lastButton8State) {  // Button state change
     if (lastButton8State == HIGH) {    // Button is OFF
-      lastDebounceButton8 = millis();
-      delay(debounceDelay);
       if ((reading8 == LOW) && (lastButton8State == HIGH)) {    // Button pushed AND was not before then toggle output status
         digitalWrite(output8, !(output8State));
         output8State = !(output8State);
@@ -558,11 +544,9 @@ void loop() {
         memorisation();            
       }
     }
-  } else {                             // Button state no change
-    lastDebounceButton8 = millis();
+    lastButton8State = reading8;         // synchronize with the switch status now
     delay(debounceDelay);
   }
-  lastButton8State = reading8;         // synchronize with the switch status now
 
   //----------------------------------------------------------------------------
   // Midi reception datas processing :
