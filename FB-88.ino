@@ -6,7 +6,7 @@
 * You will find my FB-88 Arduino/Nano "shield" (complete board, CMS components installed, soldered, card  :
 * https://www.quintium.fr/19-musiciens
 *
-* V.1.1.0 2018-12-26
+* V.1.1.1 2018-12-27
 *
 * created 15/09/2018
 * by F6HQZ Francois BERGERET
@@ -83,15 +83,23 @@ const int MidiAddrSw4 = 13;
 
 // debouncing section :
 unsigned long debounceDelay = 40; // debounce time; increase if some issues with switch debounces and output flickers
+
+// permanent status or temporary pulses ouputs
 int actionDuration = 40; // contact duration in msec (if 0 = infinite, until switch status change)
 
-int activeChan = 1; // what channel is selected at power on, change as you want
+// what channel is selected at power on, change as you want
+int activeChan = 1; 
 
 //unsigned int midiChan = 4; // Midi default channel, change as you want or let the quad-switches select it bellow
 int midiChan = 4; // Midi default channel, change as you want or let the quad-switches select it bellow
 
 // Channels Radio Buttons temporary ON check        
 void checkRadioButton(int button, int reading) {  
+  if (reading < 512) {
+    reading = LOW;
+  } else {
+    reading = HIGH;
+  }
   if (reading != lastButtonState[button]) {  // Button state change     
     if (lastButtonState[button] == HIGH) {    // Button was OFF
       if ((reading == LOW) && (lastButtonState[button] == HIGH)) {    // Button pushed AND was not before, then toggle output status
@@ -115,10 +123,14 @@ void switchChan(int chan) {
     digitalWrite(output[loop], LOW); // all channels OFF
   }
   digitalWrite(output[chan], HIGH); // only the selected channel is ON now
+  /*
   memoOutput5Chan[activeChan] = outputState[5]; // effect status are copied to effect memories for the previously selected chan# for later callback  
   memoOutput6Chan[activeChan] = outputState[6];
   memoOutput7Chan[activeChan] = outputState[7];
   memoOutput8Chan[activeChan] = outputState[8];
+  */
+  memorisation(activeChan); // effect status are copied to effect memories for the previously selected chan# for later callback  
+  
   digitalWrite(output[5],memoOutput5Chan[chan]); // read FX status memory and switch the effects outputs
   outputState[5] = memoOutput5Chan[chan];
   digitalWrite(output[6],memoOutput6Chan[chan]);
@@ -128,6 +140,7 @@ void switchChan(int chan) {
   digitalWrite(output[8],memoOutput8Chan[chan]);
   outputState[8] = memoOutput8Chan[chan];
   activeChan = chan; // as remember or sync
+  
   // Midi output for status copy in a Midi manager display
   midiA.sendProgramChange(chan-1,midiChan);
   midiA.sendControlChange(12,outputState[5],midiChan);
@@ -138,6 +151,11 @@ void switchChan(int chan) {
 
 // Single button temporary ON type check :
 void checkSingleOnOffButton(int button, int reading) {
+  if (reading < 512) {
+    reading = LOW;
+  } else {
+    reading = HIGH;
+  }
   if (reading != lastButtonState[button]) {  // Button state change
     if (lastButtonState[button] == HIGH) {    // Button is OFF
       if ((reading == LOW) && (lastButtonState[button] == HIGH)) {    // Button pushed AND was not before then toggle output status
@@ -155,7 +173,7 @@ void checkSingleOnOffButton(int button, int reading) {
 }
 
 void memorisation(int chan) {
-  memoOutput5Chan[chan] = outputState[5];
+  memoOutput5Chan[chan] = outputState[5]; // effect status are copied to effect memories for the previously selected chan# for later callback  
   memoOutput6Chan[chan] = outputState[6];
   memoOutput7Chan[chan] = outputState[7];
   memoOutput8Chan[chan] = outputState[8];
@@ -325,76 +343,36 @@ void loop() {
 
 // chan #1    
   int reading = analogRead(button[1]);
-  if (reading < 512) {
-    reading = LOW;
-  } else {
-    reading = HIGH;
-  }
   checkRadioButton(1, reading);
    
 // chan #2  
   reading = analogRead(button[2]);
-  if (reading < 512) {
-    reading = LOW;
-  } else {
-    reading = HIGH;
-  }
   checkRadioButton(2, reading);
   
 // chan #3  
   reading = analogRead(button[3]);
-  if (reading < 512) {
-    reading = LOW;
-  } else {
-    reading = HIGH;
-  }
   checkRadioButton(3, reading);
 
 // chan #4  
   reading = analogRead(button[4]);
-  if (reading < 512) {
-    reading = LOW;
-  } else {
-    reading = HIGH;
-  }
   checkRadioButton(4, reading);
   
 // These 4 following independant buttons are to select FX, REV, EQU for a Carvin Quad-X, and an OPT for other amp/preamp :
 
   // button #5 :
    reading = analogRead(button[5]); // read the buttons state
-   if (reading < 512) {
-     reading = LOW;
-   } else {
-     reading = HIGH;
-   }
    checkSingleOnOffButton(5,reading);
 
   // button #6 :
    reading = analogRead(button[6]); // read the buttons state
-   if (reading < 512) {
-     reading = LOW;
-   } else {
-     reading = HIGH;
-   }
    checkSingleOnOffButton(6,reading);
     
   // button #7 :
    reading = analogRead(button[7]); // read the buttons state
-   if (reading < 512) {
-     reading = LOW;
-   } else {
-     reading = HIGH;
-   }
    checkSingleOnOffButton(7,reading);
  
   // button #8 :
    reading = analogRead(button[8]); // read the buttons state
-   if (reading < 512) {
-     reading = LOW;
-   } else {
-     reading = HIGH;
-   }
    checkSingleOnOffButton(8,reading);
  
   //----------------------------------------------------------------------------
