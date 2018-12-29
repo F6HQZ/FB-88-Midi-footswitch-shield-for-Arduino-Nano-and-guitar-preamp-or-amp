@@ -6,7 +6,7 @@
 * You will find my FB-88 Arduino/Nano "shield" (complete board, CMS components installed, soldered, card  :
 * https://www.quintium.fr/19-musiciens
 *
-* V.1.1.1 2018-12-27
+* V.1.2.0 2018-12-29
 *
 * created 15/09/2018
 * by F6HQZ Francois BERGERET
@@ -75,7 +75,7 @@ int memoOutput6Chan[5];
 int memoOutput7Chan[5];
 int memoOutput8Chan[5];
 
-// Quad switch imputs for Midi address as example
+// Quad switch imputs for Midi address
 const int MidiAddrSw1 = 10;
 const int MidiAddrSw2 = 11;
 const int MidiAddrSw3 = 12;
@@ -172,6 +172,21 @@ void checkSingleOnOffButton(int button, int reading) {
   }
 }
 
+// Analog voltage or resistor variation check (expression/volume pedal) :
+void checkAnalogDeviceInput(int input, int reading) {
+  // Convert the analog reading (which goes from 0 - 1023) to level between 0 and 127 as requested for a Control Change Midi use
+  int controlChangeValue =  reading / 8; // result is a value from 0 to 127 ; 0 = shortcut ; 127 = open circuit
+  if (controlChangeValue != outputState[input]) {  // voltage level at input is changed  
+    outputState[input] = controlChangeValue; // CC value, from 0 to 127
+    lastButtonState[input] = reading;
+    // Midi output for status copy in a Midi manager display
+    midiA.sendControlChange(input +7,controlChangeValue,midiChan);  // CC start from 12 to 15   
+    // set the brightness of a PWM compatible output pin
+    analogWrite(output[input], controlChangeValue * 2 ); // 0 to 255 LED brightness
+    //delay(debounceDelay);
+  }
+}
+
 void memorisation(int chan) {
   memoOutput5Chan[chan] = outputState[5]; // effect status are copied to effect memories for the previously selected chan# for later callback  
   memoOutput6Chan[chan] = outputState[6];
@@ -190,7 +205,10 @@ void setup() {
   button[6] = A5;
   button[7] = A6;
   button[8] = A7;
-  
+
+  // PWM: 3, 5, 6, 9, 10, and 11. Provide 8-bit PWM output with the analogWrite() function level from 0 to 255.
+  // You can use them to dim the LED light output to display the analog level of your expression or volume pedal
+  // example is with the output pin #9 
   output[1] = 2;
   output[2] = 3;
   output[3] = 4;
@@ -373,7 +391,7 @@ void loop() {
  
   // button #8 :
    reading = analogRead(button[8]); // read the buttons state
-   checkSingleOnOffButton(8,reading);
+   checkAnalogDeviceInput(8,reading);  // this input is connected to an expression or volume pedal
  
   //----------------------------------------------------------------------------
   
