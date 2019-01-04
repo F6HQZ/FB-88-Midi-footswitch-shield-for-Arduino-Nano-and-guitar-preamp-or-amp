@@ -1,12 +1,16 @@
 /*
 * FB-88 Midi footswitch.
 * Arduino nano project.
+* 
 * This is to propose a pedalboard able to replace the Carvin FS-77, but it's ok for other brands or to add Midi control to amps which have not.
 * Need an hardware interface to correctly electricaly isolate and protect the Arduino Nano from the external Carvin Quad-X preamp footswitch connector negative voltage to avoid to destroy the Nano GPIOs.
 * You will find my FB-88 Arduino/Nano "shield" (complete board, CMS components installed, soldered, card  :
 * https://www.quintium.fr/19-musiciens
+* 
+* This source code is available at : 
+* https://github.com/F6HQZ/FB-88-Midi-footswitch-shield-for-Arduino-Nano-and-guitar-preamp-or-amp
 *
-* V.1.2.0 2018-12-29
+* V.1.2.1 2019-01-04
 *
 * created 15/09/2018
 * by F6HQZ Francois BERGERET
@@ -52,6 +56,11 @@
  */
 
 #include <MIDI.h>
+#include <EEPROM.h> // to store/save values before switch off
+
+// the starting address in the EEPROM to write the first byte
+int addr = 0;
+
 /*
 #include <SoftwareSerial.h>
 SoftwareSerial softSerial(2,3);
@@ -69,11 +78,11 @@ int lastButtonState[9];
 int output[9];
 int outputState[9];
 
-// to memorise the features status for each channel
-int memoOutput5Chan[5];
-int memoOutput6Chan[5];
-int memoOutput7Chan[5];
-int memoOutput8Chan[5];
+// to memorise the features status for each channel in a 2 dimensions variable array
+// the first dimension is the feature and the second the channel status
+// ex: memOutputChan[1][2] is accessory #1 status (reverb) for the channel #2 
+// the int memoOutputChan[x][0] could store which channel must be in use at starting 
+int memoOutputChan[5][5]; 
 
 // Quad switch imputs for Midi address
 const int MidiAddrSw1 = 10;
@@ -99,47 +108,42 @@ void checkRadioButton(int button, int reading) {
     reading = LOW;
   } else {
     reading = HIGH;
-  }
-  if (reading != lastButtonState[button]) {  // Button state change     
-    if (lastButtonState[button] == HIGH) {    // Button was OFF
-      if ((reading == LOW) && (lastButtonState[button] == HIGH)) {    // Button pushed AND was not before, then toggle output status
-        digitalWrite(output[button], !(outputState[button]));
-        outputState[button] = !(outputState[button]);
-        lastButtonState[button] = LOW;        // button pushed ON   
-        switchChan(button);     
-        // delay(debounceDelay); // used for OFF to ON transition only; normaly not needed for a radio group buttons
-      } else {
-        // delay(debounceDelay); // used for ON to OFF transition only; normaly not needed for a radio group buttons
-      }   
+  }          
+  // if more than one button is pushed in same time
+  // buttons #1 and #4 are pushed simultaneously
+  if (lastButtonState[1] == LOW && lastButtonState[4] == LOW) { 
+    lastButtonState[1] = HIGH;
+    lastButtonState[4] = HIGH;
+    backup();
+  } else {           
+    if (reading != lastButtonState[button]) {  // Button state change     
+      if (lastButtonState[button] == HIGH) {    // Button was OFF
+        if ((reading == LOW) && (lastButtonState[button] == HIGH)) {    // Button pushed ON AND was not before, then toggle output status
+          digitalWrite(output[button], !(outputState[button]));
+          outputState[button] = !(outputState[button]);
+          lastButtonState[button] = LOW;        // button pushed ON   
+          switchChan(button); // mandatory
+          // delay(debounceDelay); // used for OFF to ON transition only; normaly not needed for a radio group buttons
+        } else {
+          // delay(debounceDelay); // used for ON to OFF transition only; normaly not needed for a radio group buttons
+        }   
+      }
+      lastButtonState[button] = reading;         // synchronize with the switch status now
+      delay(debounceDelay); // for each button status change   
     }
-    lastButtonState[button] = reading;         // synchronize with the switch status now
-    delay(debounceDelay); // for each button status change   
   }
 }
 
 void switchChan(int chan) {
-  int loop = 0;
+  int loop = 1;
   for (; loop < 5; loop++) {
     digitalWrite(output[loop], LOW); // all channels OFF
   }
   digitalWrite(output[chan], HIGH); // only the selected channel is ON now
-  /*
-  memoOutput5Chan[activeChan] = outputState[5]; // effect status are copied to effect memories for the previously selected chan# for later callback  
-  memoOutput6Chan[activeChan] = outputState[6];
-  memoOutput7Chan[activeChan] = outputState[7];
-  memoOutput8Chan[activeChan] = outputState[8];
-  */
-  memorisation(activeChan); // effect status are copied to effect memories for the previously selected chan# for later callback  
   
-  digitalWrite(output[5],memoOutput5Chan[chan]); // read FX status memory and switch the effects outputs
-  outputState[5] = memoOutput5Chan[chan];
-  digitalWrite(output[6],memoOutput6Chan[chan]);
-  outputState[6] = memoOutput6Chan[chan];
-  digitalWrite(output[7],memoOutput7Chan[chan]);
-  outputState[7] = memoOutput7Chan[chan];
-  digitalWrite(output[8],memoOutput8Chan[chan]);
-  outputState[8] = memoOutput8Chan[chan];
-  activeChan = chan; // as remember or sync
+  memorisation(activeChan); // actual effect status are copied to effect memories for the previously selected chan# for later callback
+  fxReload(chan);  // read FX status memory and switch the effects outputs
+  activeChan = chan; // to re-sync
   
   // Midi output for status copy in a Midi manager display
   midiA.sendProgramChange(chan-1,midiChan);
@@ -147,6 +151,15 @@ void switchChan(int chan) {
   midiA.sendControlChange(13,outputState[6],midiChan);
   midiA.sendControlChange(14,outputState[7],midiChan);
   midiA.sendControlChange(15,outputState[8],midiChan);
+}
+
+// read FX status memory and switch the effects outputs
+void fxReload(int chan) { 
+  int loop = 1;
+  for (; loop < 5; loop++) {
+    digitalWrite(output[loop +4], memoOutputChan[loop][chan]);
+    outputState[loop +4] = memoOutputChan[loop][chan];
+  }
 }
 
 // Single button temporary ON type check :
@@ -188,15 +201,51 @@ void checkAnalogDeviceInput(int input, int reading) {
 }
 
 void memorisation(int chan) {
-  memoOutput5Chan[chan] = outputState[5]; // effect status are copied to effect memories for the previously selected chan# for later callback  
-  memoOutput6Chan[chan] = outputState[6];
-  memoOutput7Chan[chan] = outputState[7];
-  memoOutput8Chan[chan] = outputState[8];
+  int loop = 1;
+  for (; loop < 5; loop++) {
+    memoOutputChan[loop][chan] = outputState[loop +4]; // effect status are copied to effect memories for the previously selected chan# for later callback  
+  }
 }
-  
+
+void backup() {
+  // record all footswitch status to EEPROM to save them if power off
+  EEPROM.write(addr, activeChan);
+    int eepromAddr = addr;
+    int loop2 = 1;
+    for (; loop2 < 5; loop2++) {
+      int loop3 = 1;
+      for (; loop3 < 5; loop3++) {
+        eepromAddr = eepromAddr +1 ;
+        EEPROM.write(eepromAddr,  memoOutputChan[loop3][loop2]);
+      }
+    }
+  delay(1000);
+}
+
+void restore() {
+  // restore all footswitch status from EEPROM at restarting after power on
+  activeChan = EEPROM.read(addr);
+  int eepromAddr = addr;
+  int loop2 = 1;
+  for (; loop2 < 5; loop2++) {
+    int loop3 = 1;
+    for (; loop3 < 5; loop3++) {
+      eepromAddr = eepromAddr +1 ;
+      memoOutputChan[loop3][loop2] = EEPROM.read(eepromAddr);
+    }
+  }
+  // switch the output channels to match with the recorded FX status of the activeChan
+  int loop = 1;
+  for (; loop < 5; loop++) {
+    digitalWrite(output[loop +4],memoOutputChan[loop][activeChan]); // read FX status memory and switch the effects outputs
+    outputState[loop +4] = memoOutputChan[loop][activeChan];
+  }
+}
+
 // -------------------------------------------------------------------------
 
 void setup() {
+  // input lines declaration for hardware abstraction
   button[1] = A0;
   button[2] = A1;
   button[3] = A2;
@@ -206,6 +255,7 @@ void setup() {
   button[7] = A6;
   button[8] = A7;
 
+  // output lines declaration for hardware abstraction
   // PWM: 3, 5, 6, 9, 10, and 11. Provide 8-bit PWM output with the analogWrite() function level from 0 to 255.
   // You can use them to dim the LED light output to display the analog level of your expression or volume pedal
   // example is with the output pin #9 
@@ -236,23 +286,19 @@ void setup() {
   lastButtonState[7] = HIGH;
   lastButtonState[8] = HIGH;
 
-  int loop = 0;
+  int loop = 1;
   for (; loop < 5; loop++) {
-    memoOutput5Chan[loop] = LOW;
-    memoOutput6Chan[loop] = LOW;
-    memoOutput7Chan[loop] = LOW;
-    memoOutput8Chan[loop] = LOW;
+    memoOutputChan[1][loop] = LOW;
+    memoOutputChan[2][loop] = LOW;
+    memoOutputChan[3][loop] = LOW;
+    memoOutputChan[4][loop] = LOW;
   }
   
-  // Outputs 
-  pinMode(output[1], OUTPUT); 
-  pinMode(output[2], OUTPUT); 
-  pinMode(output[3], OUTPUT);
-  pinMode(output[4], OUTPUT);
-  pinMode(output[5], OUTPUT);
-  pinMode(output[6], OUTPUT);
-  pinMode(output[7], OUTPUT);
-  pinMode(output[8], OUTPUT);
+  // Outputs pinMode, all "OUTPUT"
+  loop = 1;
+  for (; loop < 9; loop++) {
+    pinMode(output[loop], OUTPUT); 
+  }
   
   // Inputs for the Midi Address quad-switch 
   pinMode(MidiAddrSw1,INPUT_PULLUP);
@@ -287,7 +333,7 @@ void setup() {
   digitalWrite(output[8], LOW);
   digitalWrite(output[1], HIGH);
  
-  activeChan = 1;
+  // activeChan = 1;
 
 // Read the quad switch on the PCB and display the requested Midi channel number with the LEDs # 5, 6, 7, and 8 status (in binary value)
   digitalWrite(output[5], !(digitalRead(MidiAddrSw4)));
@@ -318,7 +364,7 @@ void setup() {
     midiChan = midiChan | 0b0001u;
   }
 
-  // midiChan = 4; // you can force the Midi channel at what value you want, disregarding the quad-switches positions here, by uncomment this line
+  // midiChan = 4 ; // you can force the Midi channel at what value you want, disregarding the quad-switches positions here, by uncomment this line
 
   // display the Midi address by blinking effect LEDs
   digitalWrite(output[5], LOW);
@@ -328,30 +374,23 @@ void setup() {
   delay(500); 
   loop = 0 ;
   for (; loop < midiChan ; loop++) { 
-    digitalWrite(output[5], HIGH);
-    digitalWrite(output[6], HIGH);
-    digitalWrite(output[7], HIGH);
-    digitalWrite(output[8], HIGH);
-    delay(100);
-    digitalWrite(output[5], LOW);
-    digitalWrite(output[6], LOW);
-    digitalWrite(output[7], LOW);
-    digitalWrite(output[8], LOW);
-    delay(100);  
+    int  loop2 = 5 ;
+    for (; loop2 < 9 ; loop2++) { 
+      digitalWrite(output[loop2], HIGH);
+    }    
+    delay(200);
+    loop2 = 5 ;
+    for (; loop2 < 9 ; loop2++) { 
+      digitalWrite(output[loop2], LOW);
+    }
+    delay(200);  
   }
-
-  switchChan(activeChan); // init on the Chan#1
 
 //  MIDI.begin(midiChan); // set the MIDI channel and launch MIDI for the default serial port
   midiA.begin(midiChan); // set the Midi chan for a specific Midi instance named "midiA"
   midiA.turnThruOff(); // or turnThruOn(), toggle on/off midiThru
-  
-  // Midi output for status copy in a Midi manager display
-  midiA.sendProgramChange(activeChan - 1,midiChan);
-  midiA.sendControlChange(12,outputState[5],midiChan);
-  midiA.sendControlChange(13,outputState[6],midiChan);
-  midiA.sendControlChange(14,outputState[7],midiChan);
-  midiA.sendControlChange(15,outputState[8],midiChan);
+  restore(); // reload last status set before power off
+  switchChan(activeChan); // init on the active Chan#
 }
 
 //----------------------------------------------------------------------
@@ -391,7 +430,8 @@ void loop() {
  
   // button #8 :
    reading = analogRead(button[8]); // read the buttons state
-   checkAnalogDeviceInput(8,reading);  // this input is connected to an expression or volume pedal
+   checkSingleOnOffButton(8,reading);
+   // checkAnalogDeviceInput(8,reading);  // this input is connected to an expression or volume pedal
  
   //----------------------------------------------------------------------------
   
@@ -410,50 +450,29 @@ void loop() {
         switch(midiA.getData1()) {
           case 0 : {
             digitalWrite(output[1], HIGH);
-            activeChan = 1;
             digitalWrite(output[2], LOW);
             digitalWrite(output[3], LOW);
             digitalWrite(output[4], LOW);
-            digitalWrite(output[5], memoOutput5Chan[1]);
-            outputState[5] = memoOutput5Chan[1];
-            digitalWrite(output[6], memoOutput6Chan[1]);
-            outputState[6] = memoOutput6Chan[1];
-            digitalWrite(output[7], memoOutput7Chan[1]);
-            outputState[7] = memoOutput7Chan[1];
-            digitalWrite(output[8],  memoOutput7Chan[1]);
-            outputState[8] =  memoOutput8Chan[1];
+            activeChan = 1;
+            fxReload(activeChan);
             break;
           }
           case 1 : {
             digitalWrite(output[1], LOW);
             digitalWrite(output[2], HIGH);
-            activeChan = 2;
             digitalWrite(output[3], LOW);
             digitalWrite(output[4], LOW);
-            digitalWrite(output[5], memoOutput5Chan[2]);
-            outputState[5] = memoOutput5Chan[2];
-            digitalWrite(output[6], memoOutput6Chan[2]);
-            outputState[6] = memoOutput6Chan[2];
-            digitalWrite(output[7], memoOutput7Chan[2]);
-            outputState[7] = memoOutput7Chan[2];
-            digitalWrite(output[8], memoOutput8Chan[2]);
-            outputState[8] = memoOutput8Chan[2];
+            activeChan = 2;
+            fxReload(activeChan);
             break;
           }
           case 2 : {
             digitalWrite(output[1], LOW);
             digitalWrite(output[2], LOW);
             digitalWrite(output[3], HIGH);
-            activeChan = 3;
             digitalWrite(output[4], LOW);
-            digitalWrite(output[5], memoOutput5Chan[3]);
-            outputState[5] = memoOutput5Chan[3];
-            digitalWrite(output[6], memoOutput6Chan[3]);
-            outputState[6] = memoOutput6Chan[3];
-            digitalWrite(output[7], memoOutput7Chan[3]);
-            outputState[7] = memoOutput7Chan[3];
-            digitalWrite(output[8], memoOutput8Chan[3]);
-            outputState[8] = memoOutput8Chan[3];
+            activeChan = 3;
+            fxReload(activeChan);
             break;
           }
           case 3 : {
@@ -462,14 +481,7 @@ void loop() {
             digitalWrite(output[3], LOW);
             digitalWrite(output[4], HIGH);
             activeChan = 4;
-            digitalWrite(output[5], memoOutput5Chan[4]);
-            outputState[5] = memoOutput5Chan[4];
-            digitalWrite(output[6], memoOutput6Chan[4]);
-            outputState[6] = memoOutput6Chan[4];
-            digitalWrite(output[7], memoOutput7Chan[4]);
-            outputState[7] = memoOutput7Chan[4];
-            digitalWrite(output[8], memoOutput8Chan[4]);
-            outputState[8] = memoOutput8Chan[4];
+            fxReload(activeChan);
             break;
           }
           default:
