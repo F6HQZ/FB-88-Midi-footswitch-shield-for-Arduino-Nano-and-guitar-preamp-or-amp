@@ -10,7 +10,7 @@
 * This source code is available at : 
 * https://github.com/F6HQZ/FB-88-Midi-footswitch-shield-for-Arduino-Nano-and-guitar-preamp-or-amp
 *
-* V.1.2.1 2019-01-04
+* V.1.2.2 2019-01-011
 *
 * created 15/09/2018
 * by F6HQZ Francois BERGERET
@@ -55,7 +55,7 @@
  * if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <MIDI.h>
+#include <MIDI.h> // you know for what it is !
 #include <EEPROM.h> // to store/save values before switch off
 
 // the starting address in the EEPROM to write the first byte
@@ -151,6 +151,9 @@ void switchChan(int chan) {
   midiA.sendControlChange(13,outputState[6],midiChan);
   midiA.sendControlChange(14,outputState[7],midiChan);
   midiA.sendControlChange(15,outputState[8],midiChan);
+
+  // Midi messages to external Midi equipments
+  MidiMsgSend (chan); 
 }
 
 // read FX status memory and switch the effects outputs
@@ -176,12 +179,126 @@ void checkSingleOnOffButton(int button, int reading) {
         outputState[button] = !(outputState[button]);
         lastButtonState[button] = LOW;        // button pushed ON  
         // Midi output for status copy in a Midi manager display
-        midiA.sendControlChange(button +7,outputState[button],midiChan);  // CC start from 12 to 15  
+        midiA.sendControlChange(button +7,outputState[button],midiChan);  // CC start from 12 to 15. Used for buttons and outputs status replication on Midi manager software in iPad, iPhone or computer
+        // from here, instructions to sent to an external Midi equipment
+        // Midi messages to external Midi equipments
+        MidiMsgSend (button);
+        // as remember
         memorisation(activeChan);     
       }
     }
     lastButtonState[button] = reading;         // synchronize with the switch status now
     delay(debounceDelay);
+  }
+}
+
+// Here come the Midi instructions sent to external Midi equipments for any button action
+void MidiMsgSend (int button) {
+  switch (button) {
+    case 1 : {
+      if (outputState[button] == HIGH) {    // button "ON"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        midiA.sendProgramChange(0,3);
+        midiA.sendProgramChange(0,4);
+      } else {                              // button "OFF"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        midiA.sendProgramChange(0,3);
+        midiA.sendProgramChange(0,4);
+      }
+      break;
+    }
+    case 2 : {
+      if (outputState[button] == HIGH) {
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        midiA.sendProgramChange(1,3);
+        midiA.sendProgramChange(1,4);
+      } else {
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      }
+      break;
+    }
+    case 3 : {
+      if (outputState[button] == HIGH) {
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        midiA.sendProgramChange(2,3);
+        midiA.sendProgramChange(2,4);
+      } else {
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        midiA.sendProgramChange(2,3);
+        midiA.sendProgramChange(2,4);
+      }
+      break;
+    }
+    case 4 : {
+      if (outputState[button] == HIGH) {
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        midiA.sendProgramChange(3,3);
+        midiA.sendProgramChange(3,4);
+      } else {
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        midiA.sendProgramChange(3,3);
+        midiA.sendProgramChange(3,4);
+      }
+      break;
+    }
+    case 5 : {
+      if (outputState[button] == HIGH) {
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        midiA.sendProgramChange(5,3);
+      } else {
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        midiA.sendProgramChange(0,3);
+      }
+      break;
+    }
+    case 6 : {
+      if (outputState[button] == HIGH) {
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        midiA.sendProgramChange(6,3);
+      } else {
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        midiA.sendProgramChange(0,3);
+      }
+      break;
+    }
+    case 7 : {
+      if (outputState[button] == HIGH) {
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        midiA.sendProgramChange(7,3);
+      } else {
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        midiA.sendProgramChange(0,3);
+      }
+      break;
+    }
+    case 8 : {
+      if (outputState[button] == HIGH) {
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        midiA.sendProgramChange(8,3);
+      } else {
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        midiA.sendProgramChange(0,3);
+      }
+      break;
+    }
+    default:
+      break;
   }
 }
 
@@ -194,6 +311,45 @@ void checkAnalogDeviceInput(int input, int reading) {
     lastButtonState[input] = reading;
     // Midi output for status copy in a Midi manager display
     midiA.sendControlChange(input +7,controlChangeValue,midiChan);  // CC start from 12 to 15   
+    
+    // from here, instruction to an external Midi equipment
+    switch (input) {
+      case 1 : {
+        //midiA.sendControlChange(12,controlChangeValue,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        break;
+      }
+      case 2 : {
+        //midiA.sendControlChange(12,controlChangeValue,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        break;
+      }
+      case 3 : {
+        //midiA.sendControlChange(12,controlChangeValue,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        break;
+      }
+      case 4 : {
+        //midiA.sendControlChange(12,controlChangeValue,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        break;
+      }
+      case 5 : {
+        //midiA.sendControlChange(12,controlChangeValue,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        break;
+      }
+      case 6 : {
+        //midiA.sendControlChange(12,controlChangeValue,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        break;
+      }
+      case 7 : {
+        //midiA.sendControlChange(12,controlChangeValue,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        break;
+      }
+      case 8 : {
+        //midiA.sendControlChange(12,controlChangeValue,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+        break;
+      }
+      default:
+        break;
+    }
+    
     // set the brightness of a PWM compatible output pin
     analogWrite(output[input], controlChangeValue * 2 ); // 0 to 255 LED brightness
     //delay(debounceDelay);
