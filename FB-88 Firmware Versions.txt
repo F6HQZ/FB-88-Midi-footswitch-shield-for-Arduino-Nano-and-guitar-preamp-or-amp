@@ -1,0 +1,1 @@
+V1.2.4	2019-02-05	on/off toggle switches are now 0/127, no more 0/1 for Midi compliancy with some instrument softwares as Guitar Rig 5
