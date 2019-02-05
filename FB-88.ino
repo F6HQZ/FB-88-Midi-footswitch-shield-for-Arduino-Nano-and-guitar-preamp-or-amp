@@ -10,7 +10,7 @@
 * This source code is available at : 
 * https://github.com/F6HQZ/FB-88-Midi-footswitch-shield-for-Arduino-Nano-and-guitar-preamp-or-amp
 *
-* V.1.2.2 2019-01-011
+* V.1.2.4 2019-02-05
 *
 * created 15/09/2018
 * by F6HQZ Francois BERGERET
@@ -75,8 +75,8 @@ int button[9];
 int lastButtonState[9];
 
 // outputs (output[0] not used)
-int output[9];
-int outputState[9];
+int output[9]; // physical GPIO lines declaration for hardware abstraction
+int outputState[9]; // values : 0 = OFF and >0 = ON for swithcboard lines, 0 to 127 for the Midi values
 
 // to memorise the features status for each channel in a 2 dimensions variable array
 // the first dimension is the feature and the second the channel status
@@ -177,9 +177,12 @@ void checkSingleOnOffButton(int button, int reading) {
       if ((reading == LOW) && (lastButtonState[button] == HIGH)) {    // Button pushed AND was not before then toggle output status
         digitalWrite(output[button], !(outputState[button]));
         outputState[button] = !(outputState[button]);
+        if (outputState[button] > 0) {
+          outputState[button] = 127; // OFF = 0 and ON = 127 for Midi compliancy
+        }
         lastButtonState[button] = LOW;        // button pushed ON  
         // Midi output for status copy in a Midi manager display
-        midiA.sendControlChange(button +7,outputState[button],midiChan);  // CC start from 12 to 15. Used for buttons and outputs status replication on Midi manager software in iPad, iPhone or computer
+        midiA.sendControlChange(button +7,outputState[button],midiChan);  // CC start from 12 to 15. Used for buttons and outputs status replication on Midi manager software in iPad, iPhone or computer. 127 = ON ; 0 = OFF
         // from here, instructions to sent to an external Midi equipment
         // Midi messages to external Midi equipments
         MidiMsgSend (button);
@@ -366,15 +369,35 @@ void memorisation(int chan) {
 void backup() {
   // record all footswitch status to EEPROM to save them if power off
   EEPROM.write(addr, activeChan);
-    int eepromAddr = addr;
-    int loop2 = 1;
-    for (; loop2 < 5; loop2++) {
-      int loop3 = 1;
-      for (; loop3 < 5; loop3++) {
-        eepromAddr = eepromAddr +1 ;
-        EEPROM.write(eepromAddr,  memoOutputChan[loop3][loop2]);
-      }
+  int eepromAddr = addr;
+  int loop2 = 1;
+  for (; loop2 < 5; loop2++) {
+    int loop3 = 1;
+    for (; loop3 < 5; loop3++) {
+      eepromAddr = eepromAddr +1 ;
+      EEPROM.write(eepromAddr,  memoOutputChan[loop3][loop2]);
     }
+  }
+  // acknowledge by blinking effect LEDs
+  digitalWrite(output[5], LOW);
+  digitalWrite(output[6], LOW);
+  digitalWrite(output[7], LOW);
+  digitalWrite(output[8], LOW);
+  int loop = 0 ;
+  for (; loop < 5 ; loop++) { 
+    delay(100);
+    digitalWrite(output[5], HIGH);
+    digitalWrite(output[6], HIGH);
+    digitalWrite(output[7], HIGH);
+    digitalWrite(output[8], HIGH);
+    delay(100);  
+    digitalWrite(output[5], LOW);
+    digitalWrite(output[6], LOW);
+    digitalWrite(output[7], LOW);
+    digitalWrite(output[8], LOW);
+  } 
+  // switch the output channels to match with the recorded FX status of the activeChan
+  recallFxStatus();
   delay(1000);
 }
 
@@ -390,6 +413,11 @@ void restore() {
       memoOutputChan[loop3][loop2] = EEPROM.read(eepromAddr);
     }
   }
+  // switch the output channels to match with the recorded FX status of the activeChan
+  recallFxStatus();
+}
+
+void recallFxStatus() {
   // switch the output channels to match with the recorded FX status of the activeChan
   int loop = 1;
   for (; loop < 5; loop++) {
@@ -423,7 +451,8 @@ void setup() {
   output[6] = 7;
   output[7] = 8;
   output[8] = 9;
-  
+
+  // Output status 0 to 254, used for physical outputs (0=OFF and >0=ON) and for Midi statuts output (0 to 127 usualy)
   outputState[1] = LOW;
   outputState[2] = LOW;
   outputState[3] = LOW;
