@@ -10,7 +10,7 @@
 * This source code is available at : 
 * https://github.com/F6HQZ/FB-88-Midi-footswitch-shield-for-Arduino-Nano-and-guitar-preamp-or-amp
 *
-* V.1.2.4 2019-02-05
+* V.1.2.5 2019-02-10
 *
 * created 15/09/2018
 * by F6HQZ Francois BERGERET
@@ -56,7 +56,7 @@
  */
 
 #include <MIDI.h> // you know for what it is !
-#include <EEPROM.h> // to store/save values before switch off
+#include <EEPROM.h> // to store/save values before switch off and reload them at power ON
 
 // the starting address in the EEPROM to write the first byte
 int addr = 0;
@@ -82,7 +82,7 @@ int outputState[9]; // values : 0 = OFF and >0 = ON for swithcboard lines, 0 to 
 // the first dimension is the feature and the second the channel status
 // ex: memOutputChan[1][2] is accessory #1 status (reverb) for the channel #2 
 // the int memoOutputChan[x][0] could store which channel must be in use at starting 
-int memoOutputChan[5][5]; 
+int memoOutputChan[5][5]; // first variable is the FX channel, second variable is the amp channel
 
 // Quad switch imputs for Midi address
 const int MidiAddrSw1 = 10;
@@ -115,17 +115,14 @@ void checkRadioButton(int button, int reading) {
     lastButtonState[1] = HIGH;
     lastButtonState[4] = HIGH;
     backup();
-  } else {           
+  } else {  
+    // only one button pushed         
     if (reading != lastButtonState[button]) {  // Button state change     
       if (lastButtonState[button] == HIGH) {    // Button was OFF
         if ((reading == LOW) && (lastButtonState[button] == HIGH)) {    // Button pushed ON AND was not before, then toggle output status
-          digitalWrite(output[button], !(outputState[button]));
           outputState[button] = !(outputState[button]);
           lastButtonState[button] = LOW;        // button pushed ON   
-          switchChan(button); // mandatory
-          // delay(debounceDelay); // used for OFF to ON transition only; normaly not needed for a radio group buttons
-        } else {
-          // delay(debounceDelay); // used for ON to OFF transition only; normaly not needed for a radio group buttons
+          switchChan(button);
         }   
       }
       lastButtonState[button] = reading;         // synchronize with the switch status now
@@ -152,7 +149,7 @@ void switchChan(int chan) {
   midiA.sendControlChange(14,outputState[7],midiChan);
   midiA.sendControlChange(15,outputState[8],midiChan);
 
-  // Midi messages to external Midi equipments
+  // send Midi messages to external Midi equipments
   MidiMsgSend (chan); 
 }
 
@@ -172,130 +169,149 @@ void checkSingleOnOffButton(int button, int reading) {
   } else {
     reading = HIGH;
   }
-  if (reading != lastButtonState[button]) {  // Button state change
-    if (lastButtonState[button] == HIGH) {    // Button is OFF
-      if ((reading == LOW) && (lastButtonState[button] == HIGH)) {    // Button pushed AND was not before then toggle output status
-        digitalWrite(output[button], !(outputState[button]));
-        outputState[button] = !(outputState[button]);
-        if (outputState[button] > 0) {
-          outputState[button] = 127; // OFF = 0 and ON = 127 for Midi compliancy
+  // if more than one button is pushed in same time
+  // buttons #5 and #8 are pushed simultaneously
+  if (lastButtonState[5] == LOW && lastButtonState[8] == LOW) { 
+    lastButtonState[5] = HIGH;
+    lastButtonState[8] = HIGH;
+    //backup(); or any other insteresting needed action there
+  } else {
+    // only one button pushed
+    if (reading != lastButtonState[button]) {  // Button state change
+      if (lastButtonState[button] == HIGH) {    // Button is OFF
+        if ((reading == LOW) && (lastButtonState[button] == HIGH)) {    // Button pushed AND was not before then toggle output status       
+          outputState[button] = !(outputState[button]);
+          lastButtonState[button] = LOW;    // button pushed         
+          if (outputState[button] > 0) {
+            outputState[button] = 127;      // OFF = 0 and ON = 127 for Midi compliancy
+          }  
+          switchFX(button,outputState[button]);    
         }
-        lastButtonState[button] = LOW;        // button pushed ON  
-        // Midi output for status copy in a Midi manager display
-        midiA.sendControlChange(button +7,outputState[button],midiChan);  // CC start from 12 to 15. Used for buttons and outputs status replication on Midi manager software in iPad, iPhone or computer. 127 = ON ; 0 = OFF
-        // from here, instructions to sent to an external Midi equipment
-        // Midi messages to external Midi equipments
-        MidiMsgSend (button);
-        // as remember
-        memorisation(activeChan);     
       }
+      lastButtonState[button] = reading;         // synchronize with the switch status now
+      delay(debounceDelay);
     }
-    lastButtonState[button] = reading;         // synchronize with the switch status now
-    delay(debounceDelay);
   }
 }
 
-// Here come the Midi instructions sent to external Midi equipments for any button action
+void switchFX(int button,int value) {     // button pushed and what value for Midi
+  digitalWrite(output[button], value);    // enlight the local LED and trigger the footswitch line to AMP 
+
+  memorisation(activeChan); // actual effect status are copied to effect memories for the previously selected chan# for later callback
+
+  outputState[button] = value;
+  memoOutputChan[button -4][activeChan] = value; 
+  
+  // Midi output for status copy in a Midi manager display
+  midiA.sendControlChange(button +7, value, midiChan);  // CC start from 12 to 15. Used for buttons and outputs status replication on Midi manager software in iPad, iPhone or computer. 0 = OFF ; 127 = ON
+
+  // send Midi messages to external Midi equipments depending what button actionned
+  MidiMsgSend(button);
+}
+
+// Here come the Midi instructions list sent to external Midi equipments for any button action
 void MidiMsgSend (int button) {
   switch (button) {
     case 1 : {
-      if (outputState[button] == HIGH) {    // button "ON"
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      if (outputState[1] == HIGH) {    // "ON"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
         midiA.sendProgramChange(0,3);
         midiA.sendProgramChange(0,4);
-      } else {                              // button "OFF"
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      } else {                              // "OFF"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
         midiA.sendProgramChange(0,3);
         midiA.sendProgramChange(0,4);
       }
       break;
     }
     case 2 : {
-      if (outputState[button] == HIGH) {
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      if (outputState[2] == HIGH) {    // "ON"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
         midiA.sendProgramChange(1,3);
         midiA.sendProgramChange(1,4);
-      } else {
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      } else {                              // "OFF"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
+        midiA.sendProgramChange(1,3);
+        midiA.sendProgramChange(1,4);
       }
       break;
     }
     case 3 : {
-      if (outputState[button] == HIGH) {
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      if (outputState[3] == HIGH) {    // "ON"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
         midiA.sendProgramChange(2,3);
         midiA.sendProgramChange(2,4);
-      } else {
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      } else {                              // "OFF"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
         midiA.sendProgramChange(2,3);
         midiA.sendProgramChange(2,4);
       }
       break;
     }
     case 4 : {
-      if (outputState[button] == HIGH) {
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      if (outputState[4] == HIGH) {    // "ON"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
         midiA.sendProgramChange(3,3);
         midiA.sendProgramChange(3,4);
-      } else {
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      } else {                              // "OFF"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
         midiA.sendProgramChange(3,3);
         midiA.sendProgramChange(3,4);
       }
       break;
     }
     case 5 : {
-      if (outputState[button] == HIGH) {
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      if (outputState[5] == 127) {    // "ON"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
         midiA.sendProgramChange(5,3);
-      } else {
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      } else {                              // "OFF"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
         midiA.sendProgramChange(0,3);
       }
       break;
     }
     case 6 : {
-      if (outputState[button] == HIGH) {
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      if (outputState[6] == 127) {    // "ON"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
         midiA.sendProgramChange(6,3);
-      } else {
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      } else {                              // "OFF"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
         midiA.sendProgramChange(0,3);
       }
       break;
     }
     case 7 : {
-      if (outputState[button] == HIGH) {
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      if (outputState[7] == 127) {    // "ON"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
         midiA.sendProgramChange(7,3);
-      } else {
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      } else {                              // "OFF"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
         midiA.sendProgramChange(0,3);
       }
       break;
     }
     case 8 : {
-      if (outputState[button] == HIGH) {
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      if (outputState[8] == 127) {    // "ON"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
         midiA.sendProgramChange(8,3);
-      } else {
-        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; targer engine listening on Midi Chan #4
-        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
+      } else {                              // "OFF"
+        //midiA.sendProgramChange(3,4);     // PC control to switch to chan# 3; engine ID listening on Midi Chan #4
+        //midiA.sendControlChange(12,0,3);  // CC control #12, level 0, engine ID listening on  Midi Chan #3
         midiA.sendProgramChange(0,3);
       }
       break;
@@ -315,7 +331,7 @@ void checkAnalogDeviceInput(int input, int reading) {
     // Midi output for status copy in a Midi manager display
     midiA.sendControlChange(input +7,controlChangeValue,midiChan);  // CC start from 12 to 15   
     
-    // from here, instruction to an external Midi equipment
+    // from here, instruction to an external Midi equipment, sent by each of 8 possible inputs
     switch (input) {
       case 1 : {
         //midiA.sendControlChange(12,controlChangeValue,3);  // CC control #12, level 0, target engine listening on  Midi Chan #3
@@ -634,39 +650,19 @@ void loop() {
       case midi::ProgramChange:         // If it is a Program Change, do the job here, change amp chan and so...
         switch(midiA.getData1()) {
           case 0 : {
-            digitalWrite(output[1], HIGH);
-            digitalWrite(output[2], LOW);
-            digitalWrite(output[3], LOW);
-            digitalWrite(output[4], LOW);
-            activeChan = 1;
-            fxReload(activeChan);
+            switchChan(1);
             break;
           }
           case 1 : {
-            digitalWrite(output[1], LOW);
-            digitalWrite(output[2], HIGH);
-            digitalWrite(output[3], LOW);
-            digitalWrite(output[4], LOW);
-            activeChan = 2;
-            fxReload(activeChan);
+            switchChan(2);
             break;
           }
           case 2 : {
-            digitalWrite(output[1], LOW);
-            digitalWrite(output[2], LOW);
-            digitalWrite(output[3], HIGH);
-            digitalWrite(output[4], LOW);
-            activeChan = 3;
-            fxReload(activeChan);
+            switchChan(3);
             break;
           }
           case 3 : {
-            digitalWrite(output[1], LOW);
-            digitalWrite(output[2], LOW);
-            digitalWrite(output[3], LOW);
-            digitalWrite(output[4], HIGH);
-            activeChan = 4;
-            fxReload(activeChan);
+            switchChan(4);
             break;
           }
           default:
@@ -675,94 +671,24 @@ void loop() {
         case midi::ControlChange:       // If it is a Control Change, do the job here, switch ON/OFF extra feature as REV, FX, EQ...
           switch(midiA.getData1()) {
             case 12 : {                     // an ON/OFF switch feature REV on Carvin Quad-X Amp as example
-              switch(midiA.getData2()) {    // value : 0 = OFF and 127 = ON
-                case 0 : {
-                  digitalWrite(output[5], LOW);
-                  outputState[5] = LOW;
-                  //lastButtonState[5] = LOW;    
-                  memorisation(activeChan);           // record options status for the current channel
-                  break;
-                }
-                case 127 : {
-                  digitalWrite(output[5], HIGH);
-                  outputState[5] = HIGH;
-                  //lastButtonState[5] = LOW;    
-                  memorisation(activeChan);           // record options status for the current channel
-                  break;
-                }
-                default:
-                  break;
-              }
+              switchFX(5,midiA.getData2());
+              break;
             }
-            break;            
             case 13 : {                     // an ON/OFF switch feature REV on Carvin Quad-X Amp as example
-              switch(midiA.getData2()) {    // value : 0 = OFF and 127 = ON
-                case 0 : {
-                  digitalWrite(output[6], LOW);
-                  outputState[6] = LOW;
-                  //lastButtonState[6] = LOW;    
-                  memorisation(activeChan);           // record options status for the current channel
-                  break;
-                }
-                case 127 : {
-                  digitalWrite(output[6], HIGH);
-                  outputState[6] = HIGH; 
-                  //lastButtonState[6] = LOW;    
-                  memorisation(activeChan);           // record options status for the current channel
-                  break;
-                }
-                default:
-                  break;
-              }
+              switchFX(6,midiA.getData2());
               break;
             }                  
             case 14 : {                     // an ON/OFF switch feature REV on Carvin Quad-X Amp as example
-              switch(midiA.getData2()) {    // value : 0 = OFF and 127 = ON
-                case 0 : {
-                  digitalWrite(output[7], LOW);
-                  outputState[7] = LOW;    
-                  memorisation(activeChan);           // record options status for the current channel
-                  break;
-                }
-                case 127 : {
-                  digitalWrite(output[7], HIGH);
-                  outputState[7] = HIGH;  
-                  memorisation(activeChan);           // record options status for the current channel                  
-                  break;
-                }
-                default:
-                  break;
-              }
+              switchFX(7,midiA.getData2());
               break;
             }
             case 15 : {                     // a fourth ON/OFF switch feature on another amp as Carvin Quad-X Amp which as only 3 
-              switch(midiA.getData2()) {    // value : 0 = OFF and 127 = ON
-                case 0 : {
-                  digitalWrite(output[8], LOW);
-                  outputState[8] = LOW;
-                  //lastButtonState[8] = LOW;     
-                  // send Midi message to copy status to manager in iPAD as example
-                  //midiA.sendControlChange(15,0,midiChan);
-                  memorisation(activeChan);           // record options status for the current channel
-                  break;
-                }
-                case 127 : {
-                  digitalWrite(output[8], HIGH);
-                  outputState[8] = HIGH;
-                  //lastButtonState[8] = LOW;
-                  // send Midi message to copy status to manager in iPAD as example
-                  //midiA.sendControlChange(15,1,midiChan);     
-                  memorisation(activeChan);           // record options status for the current channel                  
-                  break;
-                }
-                default:
-                  break;
-              }
+              switchFX(8,midiA.getData2());
               break;
             }
             default:
               break;
-          }
+          } 
        default:
          break;
     }
